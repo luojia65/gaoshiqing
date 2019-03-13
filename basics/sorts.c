@@ -27,7 +27,7 @@ void bubble_sort(int *A, int n) {
 
 #define LC(x) (2*x+1)
 #define RC(x) (2*x+2)
-#define PAR(x) (((x+1)/2)-1)
+#define PAR(x) ((x-1)/2)
 
 void max_heapify(int *A, int n, int i) {
     int l=LC(i);
@@ -82,7 +82,7 @@ void quicksort(int *A,int n) {
 
 void main() {
     int A[]={5,3,1,4,2,6,7,9,0,8};
-    quicksort(A,10);
+    heap_sort(A,10);
     for(int i=0;i<10;++i) printf("%d,",A[i]);
     putchar('\n');
 }
