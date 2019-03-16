@@ -5,7 +5,7 @@
 #define H 512
 #define TWO_PI 6.28318530718f
 #define N 16
-#define MAX_STEP 10
+#define MAX_STEP 64
 #define MAX_DISTANCE 2.0f
 #define EPSILON 1e-6f
 #define BIAS 1e-4f
@@ -83,14 +83,8 @@ Result subtractOp(Result a, Result b) {
     return r;
 }
 
-void reflect(float ix, float iy, float nx, float ny, float* rx, float* ry) {
-    float idotn2 = (ix * nx + iy * ny) * 2.0f;
-    *rx = ix - idotn2 * nx;
-    *ry = iy - idotn2 * ny;
-}
-
 Result scene(float x, float y) {
-    Result a = { circleSDF(x, y, 0.4f, 0.2f, 0.1f), 5.0f, 0.0f };
+    Result a = { circleSDF(x, y, 0.4f, 0.2f, 0.1f), 2.0f, 0.0f };
     Result d = {  planeSDF(x, y, 0.0f, 0.5f, 0.0f, -1.0f), 0.0f, 0.9f };
     Result e = { circleSDF(x, y, 0.5f, 0.5f, 0.4f), 0.0f, 0.9f };
     return unionOp(a, subtractOp(d, e));
@@ -99,6 +93,12 @@ Result scene(float x, float y) {
 void gradient(float x, float y, float* nx, float* ny) {
     *nx = (scene(x + EPSILON, y).sd - scene(x - EPSILON, y).sd) * (0.5f / EPSILON);
     *ny = (scene(x, y + EPSILON).sd - scene(x, y - EPSILON).sd) * (0.5f / EPSILON);
+}
+
+void reflect(float ix, float iy, float nx, float ny, float* rx, float* ry) {
+    float idotn2 = (ix * nx + iy * ny) * 2.0f;
+    *rx = ix - idotn2 * nx;
+    *ry = iy - idotn2 * ny;
 }
 
 float trace(float ox, float oy, float dx, float dy,int depth) {
@@ -133,15 +133,13 @@ float sample(float x, float y) {
 void main() {
     unsigned char* p = img;
     for(int y=0;y<H;++y)
-        for(int x=0;x<W;++x, p+=3)
-            p[0]=p[1]=p[2]=(int)(fminf(sample((float)x/W, (float)y/H)*255.0f, 255.0f));
-    // for(int y=0;y<H;++y)
-    // for(int x=0;x<W;++x, p += 3) {
-    //     float nx,ny;
-    //     gradient((float)x/W, (float)y/H, &nx, &ny);
-    //     p[0] = (int)((fmaxf(fminf(nx, 1.0f), -1.0f) * 0.5f + 0.5f) * 255.0f);
-    //     p[1] = (int)((fmaxf(fminf(ny, 1.0f), -1.0f) * 0.5f + 0.5f) * 255.0f);
-    //     p[2] = 0;
-    // }
+        for(int x=0;x<W;++x, p+=3) {
+        // float nx,ny;
+        // gradient((float)x/W, (float)y/H, &nx, &ny);
+        // p[0] = (int)((fmaxf(fminf(nx, 1.0f), -1.0f) * 0.5f + 0.5f) * 255.0f);
+        // p[1] = (int)((fmaxf(fminf(ny, 1.0f), -1.0f) * 0.5f + 0.5f) * 255.0f);
+        // p[2] = 0;
+        p[0]=p[1]=p[2]=(int)(fminf(sample((float)x/W, (float)y/H)*255.0f, 255.0f));
+    }
     svpng(fopen("basic.png","wb"), W, H, img, 0);
 }
