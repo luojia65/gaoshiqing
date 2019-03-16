@@ -52,6 +52,19 @@ float triangleSDF(float x, float y, float ax, float ay, float bx, float by, floa
         (ax-cx)*(y-cy) > (ay-cy)*(x-cx)? -d: d;
 }
 
+// float arcSDF(float x, float y, float ox, float oy, float r, float thetaf, float thetat) {
+//     float thetap = atan2f(y-oy, x-ox);
+//     if(((thetaf <= thetat) &&(thetaf < thetap && thetap < thetat)) || 
+//        ((thetaf > thetat)  &&(thetat < thetap && thetap < thetaf))) 
+//     {
+//         return fmaxf(fminf(fabsf(sqrtf((x-ox)*(x-ox)+(y-oy)*(y-oy))-r), 1.0f), 0.0f);
+//     } else {
+//         float fx = ox + r*cosf(thetaf), fy = oy + r*sinf(thetaf);
+//         float tx = ox + r*cosf(thetat), ty = oy + r*sinf(thetat);
+//         return fmaxf(sqrtf((x-fx)*(x-fx)+(y-fy)*(y-fy)), sqrtf((x-tx)*(x-tx)+(y-ty)*(y-ty)));
+//     }
+// } 辣鸡代码，逻辑错误
+
 Result unionOp(Result a, Result b) {
     return (a.sd<b.sd)?a:b;
 }
