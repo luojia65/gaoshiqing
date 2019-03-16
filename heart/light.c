@@ -4,14 +4,16 @@
 #define W 512
 #define H 512
 #define TWO_PI 6.28318530718f
-#define N 8
+#define N 16
 #define MAX_STEP 10
 #define MAX_DISTANCE 2.0f
 #define EPSILON 1e-6f
+#define BIAS 1e-4f
+#define MAX_DEPTH 3
 
 unsigned char img[W * H * 3];
 
-typedef struct { float sd, emissive; } Result;
+typedef struct { float sd, emissive, reflectivity; } Result;
 
 float circleSDF(float x, float y, float cx, float cy, float r) {
     float ux = x-cx, uy=y-cy;
@@ -81,23 +83,39 @@ Result subtractOp(Result a, Result b) {
     return r;
 }
 
-Result scene(float x, float y) {
-    // Result r1 = { circleSDF(x, y, 0.5f, 0.5f, 0.25f), 2.0f };
-    // Result r2 = { circleSDF(x, y, 0.3f, 0.7f, 0.05f), 1.8f };
-    // Result r3 = { circleSDF(x, y, 0.7f, 0.3f, 0.1f), 0.0f };
-    // return unionOp(subtractOp(r1, r2), r3);
-    // Result a = { circleSDF(x, y, 0.5f, 0.5f, 0.2f), 1.0f };
-    // Result b = { planeSDF(x, y, 0.0f, 0.5f, 0.0f, 1.0f), 0.8f }; 
-    // return intersectOp(a, b);
-    Result f = { triangleSDF(x, y, 0.5f, 0.2f, 0.8f, 0.8f, 0.3f, 0.6f), 1.0f };
-    return f;
+void reflect(float ix, float iy, float nx, float ny, float* rx, float* ry) {
+    float idotn2 = (ix * nx + iy * ny) * 2.0f;
+    *rx = ix - idotn2 * nx;
+    *ry = iy - idotn2 * ny;
 }
 
-float trace(float ox, float oy, float dx, float dy) {
+Result scene(float x, float y) {
+    Result a = { circleSDF(x, y, 0.4f, 0.2f, 0.1f), 5.0f, 0.0f };
+    Result d = {  planeSDF(x, y, 0.0f, 0.5f, 0.0f, -1.0f), 0.0f, 0.9f };
+    Result e = { circleSDF(x, y, 0.5f, 0.5f, 0.4f), 0.0f, 0.9f };
+    return unionOp(a, subtractOp(d, e));
+}
+
+void gradient(float x, float y, float* nx, float* ny) {
+    *nx = (scene(x + EPSILON, y).sd - scene(x - EPSILON, y).sd) * (0.5f / EPSILON);
+    *ny = (scene(x, y + EPSILON).sd - scene(x, y - EPSILON).sd) * (0.5f / EPSILON);
+}
+
+float trace(float ox, float oy, float dx, float dy,int depth) {
     float t=0.0f ;
     for(int i=0;i<MAX_STEP&&t<MAX_DISTANCE; i++) {
-        Result r = scene(ox+dx*t, oy+dy*t);
-        if(r.sd < EPSILON) return r.emissive;
+        float x=ox+dx*t, y=oy+dy*t;
+        Result r = scene(x,y);
+        if(r.sd < EPSILON) {
+            float sum = r.emissive;
+            if(depth<MAX_DEPTH &&r.reflectivity>0.0f) {
+                float nx,ny,rx,ry;
+                gradient(x,y,&nx,&ny);
+                reflect(dx,dy,nx,ny,&rx,&ry);
+                sum+=r.reflectivity*trace(x+nx*BIAS,y+ny*BIAS,rx,ry,depth+1);
+            }
+            return sum;
+        }
         t+=r.sd;
     }
     return 0.0f;
@@ -107,7 +125,7 @@ float sample(float x, float y) {
     float sum = 0.0f;
     for(int i=0;i<N;++i) {
         float a = TWO_PI * (i + (float)rand()/RAND_MAX)/N;
-        sum += trace(x, y, cosf(a), sinf(a));
+        sum += trace(x, y, cosf(a), sinf(a), 0);
     }
     return sum/N;
 }
@@ -117,5 +135,13 @@ void main() {
     for(int y=0;y<H;++y)
         for(int x=0;x<W;++x, p+=3)
             p[0]=p[1]=p[2]=(int)(fminf(sample((float)x/W, (float)y/H)*255.0f, 255.0f));
+    // for(int y=0;y<H;++y)
+    // for(int x=0;x<W;++x, p += 3) {
+    //     float nx,ny;
+    //     gradient((float)x/W, (float)y/H, &nx, &ny);
+    //     p[0] = (int)((fmaxf(fminf(nx, 1.0f), -1.0f) * 0.5f + 0.5f) * 255.0f);
+    //     p[1] = (int)((fmaxf(fminf(ny, 1.0f), -1.0f) * 0.5f + 0.5f) * 255.0f);
+    //     p[2] = 0;
+    // }
     svpng(fopen("basic.png","wb"), W, H, img, 0);
 }
