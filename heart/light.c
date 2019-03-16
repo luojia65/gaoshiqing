@@ -13,7 +13,7 @@
 
 unsigned char img[W * H * 3];
 
-typedef struct { float sd, emissive, reflectivity; } Result;
+typedef struct { float sd, emissive, reflectivity, eta; } Result;
 
 float circleSDF(float x, float y, float cx, float cy, float r) {
     float ux = x-cx, uy=y-cy;
@@ -84,10 +84,12 @@ Result subtractOp(Result a, Result b) {
 }
 
 Result scene(float x, float y) {
-    Result a = { circleSDF(x, y, 0.4f, 0.2f, 0.1f), 2.0f, 0.0f };
-    Result d = {  planeSDF(x, y, 0.0f, 0.5f, 0.0f, -1.0f), 0.0f, 0.9f };
-    Result e = { circleSDF(x, y, 0.5f, 0.5f, 0.4f), 0.0f, 0.9f };
-    return unionOp(a, subtractOp(d, e));
+    Result a = { circleSDF(x, y, -0.2f, -0.2f, 0.1f), 10.0f, 0.0f, 0.0f };
+    Result b = { circleSDF(x, y, 0.35f, 0.35f, 0.15f), 0.0f, 0.2f, 1.5f };
+    Result c = { circleSDF(x, y, 0.65f, 0.35f, 0.15f), 0.0f, 0.2f, 1.5f };
+    Result d = { planeSDF(x, y, 0.5f, 0.35f, 0.0f, 1.0f), 0.0f, 0.2f, 1.5f };
+    Result e = { triangleSDF(x, y, 0.2f, 0.35f, 0.8f, 0.35f, 0.5f, 0.8f), 0.0f, 0.2f, 1.5f };
+    return unionOp(a, unionOp(intersectOp(unionOp(b, c), d), e));
 }
 
 void gradient(float x, float y, float* nx, float* ny) {
@@ -101,22 +103,43 @@ void reflect(float ix, float iy, float nx, float ny, float* rx, float* ry) {
     *ry = iy - idotn2 * ny;
 }
 
-float trace(float ox, float oy, float dx, float dy,int depth) {
-    float t=0.0f ;
-    for(int i=0;i<MAX_STEP&&t<MAX_DISTANCE; i++) {
-        float x=ox+dx*t, y=oy+dy*t;
-        Result r = scene(x,y);
-        if(r.sd < EPSILON) {
+int refract(float ix, float iy, float nx, float ny, float eta, float* rx, float* ry) {
+    float idotn = ix * nx + iy * ny;
+    float k = 1.0f - eta * eta * (1.0f - idotn * idotn);
+    if (k < 0.0f)
+        return 0; // Total internal reflection
+    float a = eta * idotn + sqrtf(k);
+    *rx = eta * ix - a * nx;
+    *ry = eta * iy - a * ny;
+    return 1;
+}
+
+float trace(float ox, float oy, float dx, float dy, int depth) {
+    float t = 1e-3f;
+    float sign = scene(ox, oy).sd > 0.0f ? 1.0f : -1.0f; 
+    for (int i = 0; i < MAX_STEP && t < MAX_DISTANCE; i++) {
+        float x = ox + dx * t, y = oy + dy * t;
+        Result r = scene(x, y);
+        if (r.sd * sign < EPSILON) { 
             float sum = r.emissive;
-            if(depth<MAX_DEPTH &&r.reflectivity>0.0f) {
-                float nx,ny,rx,ry;
-                gradient(x,y,&nx,&ny);
-                reflect(dx,dy,nx,ny,&rx,&ry);
-                sum+=r.reflectivity*trace(x+nx*BIAS,y+ny*BIAS,rx,ry,depth+1);
+            if (depth < MAX_DEPTH && (r.reflectivity > 0.0f || r.eta > 0.0f)) {
+                float nx, ny, rx, ry, refl = r.reflectivity;
+                gradient(x, y, &nx, &ny);
+                nx *= sign; ny *= sign;
+                if (r.eta > 0.0f) {
+                    if (refract(dx, dy, nx, ny, sign < 0.0f ? r.eta : 1.0f / r.eta, &rx, &ry))
+                        sum += (1.0f - refl) * trace(x - nx * BIAS, y - ny * BIAS, rx, ry, depth + 1);
+                    else
+                        refl = 1.0f; 
+                }
+                if (refl > 0.0f) {
+                    reflect(dx, dy, nx, ny, &rx, &ry);
+                    sum += refl * trace(x + nx * BIAS, y + ny * BIAS, rx, ry, depth + 1);
+                }
             }
             return sum;
         }
-        t+=r.sd;
+        t += r.sd * sign;
     }
     return 0.0f;
 }
