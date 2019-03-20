@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "*.inc": "c",
-        "math.h": "c"
+        "math.h": "c",
+        "threads.h": "c"
     }
 }

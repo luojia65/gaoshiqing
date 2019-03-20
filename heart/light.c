@@ -4,7 +4,7 @@
 #define W 512
 #define H 512
 #define TWO_PI 6.28318530718f
-#define N 16
+#define N 1024
 #define MAX_STEP 64
 #define MAX_DISTANCE 2.0f
 #define EPSILON 1e-6f
@@ -84,12 +84,9 @@ Result subtractOp(Result a, Result b) {
 }
 
 Result scene(float x, float y) {
-    Result a = { circleSDF(x, y, -0.2f, -0.2f, 0.1f), 10.0f, 0.0f, 0.0f };
-    Result b = { circleSDF(x, y, 0.35f, 0.35f, 0.15f), 0.0f, 0.2f, 1.5f };
-    Result c = { circleSDF(x, y, 0.65f, 0.35f, 0.15f), 0.0f, 0.2f, 1.5f };
-    Result d = { planeSDF(x, y, 0.5f, 0.35f, 0.0f, 1.0f), 0.0f, 0.2f, 1.5f };
-    Result e = { triangleSDF(x, y, 0.2f, 0.35f, 0.8f, 0.35f, 0.5f, 0.8f), 0.0f, 0.2f, 1.5f };
-    return unionOp(a, unionOp(intersectOp(unionOp(b, c), d), e));
+    Result a = { segmentSDF(x, y, 0.5f, 0.7f, 0.5f, 0.8f), 10.0f, 0.0f, 0.0f };
+    Result b = { circleSDF(x, y, 0.5f, 0.5f, 0.2f), 0.0f, 0.2f, 1.5f };
+    return unionOp(a, b);
 }
 
 void gradient(float x, float y, float* nx, float* ny) {
@@ -164,5 +161,5 @@ void main() {
         // p[2] = 0;
         p[0]=p[1]=p[2]=(int)(fminf(sample((float)x/W, (float)y/H)*255.0f, 255.0f));
     }
-    svpng(fopen("basic.png","wb"), W, H, img, 0);
+    svpng(fopen("output.png","wb"), W, H, img, 0);
 }
