@@ -2,6 +2,7 @@
     "files.associations": {
         "*.inc": "c",
         "math.h": "c",
-        "threads.h": "c"
+        "threads.h": "c",
+        "stdlib.h": "c"
     }
 }
