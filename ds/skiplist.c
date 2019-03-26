@@ -1,13 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define MAX_HEIGHT 12
+#define MAX_HEIGHT 5
 
 typedef struct Node {
     int elem;
     int forward_len;
     struct Node *forward[MAX_HEIGHT];
-    struct Node *back;
 } Node;
 
 int next_height() {
@@ -38,7 +37,9 @@ void do_insert() {
             else cur = nxt;
         } else if (i == 0 && nxt != NULL) {
             if (elem < nxt->elem) {	
-            	//todo
+            	for(int j = MAX_HEIGHT - 1; j >= 0; j--) {
+					
+				}
                 break;
             }
             else cur = cur->forward[i];
