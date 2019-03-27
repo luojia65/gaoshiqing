@@ -137,8 +137,36 @@ void b_tree_remove(Node *x, int elem) {
 				r->n--;
 				m->n++;
 				b_tree_remove(m,elem);
-			} else {
-				//这部分超难  
+			} else if (i>=2){
+				Node *l=x->c[i-1];
+				for(int j=1;j<=m->n;++j) 
+					l->key[j+T]=m->key[j];
+				l->key[T]=x->key[i];
+				if(l->leaf==0) for(int j=1;j<=m->n+1;++j) 
+					l->c[j+T]=m->c[j];
+				for(int j=i;j<=x->n-1;++j) {
+					x->key[j]=x->key[j+1];
+					x->c[j]=x->c[j+1];
+				}
+				x->n--;
+				l->n=2*T-1;
+				free(m);
+				b_tree_remove(l,elem); 
+			} else if (i==1) {
+				Node *r=x->c[i+1];
+				for(int j=1;j<=r->n;++j)
+					m->key[j+T]=r->key[j];
+				m->key[T]=x->key[i];
+				if(r->leaf==0) for(int j=1;j<=r->n+1;++j) 
+					m->c[j+T]=r->c[j];
+				for(int j=i;j<=x->n-1;++j) {
+					x->key[j]=x->key[j+1];
+					x->c[j+1]=x->c[j+2];
+				}
+				x->n--;
+				m->n=2*T-1;
+				free(r);
+				b_tree_remove(m,elem);
 			}
 		}
 	} 
@@ -159,6 +187,7 @@ void main() {
 //		b_tree_search(tree, i, &ptr, &ind);
 //		printf("%d => %d\n", i, ind);
 //	}
-	b_tree_remove(tree, 7); 
+	for(int i=1;i<=21;i++) 
+		b_tree_remove(tree, i); 
 }
  
