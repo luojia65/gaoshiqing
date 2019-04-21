@@ -3,9 +3,32 @@
 #include <setupapi.h>
 #include <strsafe.h>
 #include <winusb.h>
+//#define NDEBUG
+#include <assert.h>
 
 static GUID GUID_DEVINTERFACE_USB_DEVICE =
 { 0xA5DCBF10L, 0x6530, 0x11D2, { 0x90, 0x1F, 0x00, 0xC0, 0x4F, 0xB9, 0x51, 0xED } };
+
+void MyApp_PrintDeviceSpeed(WINUSB_INTERFACE_HANDLE WinUsbHandle) {
+	UCHAR DeviceSpeed;
+	ULONG BufSize = 1;
+	BOOL bResult = WinUsb_QueryDeviceInformation(
+		WinUsbHandle, 
+		DEVICE_SPEED, 
+		&BufSize, 
+		&DeviceSpeed
+	);
+	if (bResult == FALSE) {
+	    printf("Error getting device speed: %d.\n", GetLastError());
+		return;
+	}
+	switch(DeviceSpeed) {
+		case LowSpeed: printf("Device speed: %d (Low speed).\n", DeviceSpeed); break;
+		case FullSpeed: printf("Device speed: %d (Full speed).\n", DeviceSpeed); break;
+		case HighSpeed: printf("Device speed: %d (High speed).\n", DeviceSpeed); break;
+  		default: printf("Unrecognized speed %d\n", DeviceSpeed);
+	}
+}
 
 void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 	HANDLE DeviceHandle = CreateFileW(
@@ -27,26 +50,47 @@ void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 		printf("WinUsb initialize error: %d\n", GetLastError());
 		return;
 	}
-	// WinUsbHandle is now valid
+	// WinUsbHandle is now valid. Do NOT confuse WinUsbHandle with DeviceHandle
+	
 	// Get USB speed
-	UCHAR DeviceSpeed;
-	ULONG BufSize = 1;
-	bResult = WinUsb_QueryDeviceInformation(
-		WinUsbHandle, 
-		DEVICE_SPEED, 
-		&BufSize, 
-		&DeviceSpeed
-	);
-	if (bResult == FALSE) {
-	    printf("Error getting device speed: %d.\n", GetLastError());
-		return;
+	MyApp_PrintDeviceSpeed(WinUsbHandle);
+	
+	// Get PipeId  
+	USB_INTERFACE_DESCRIPTOR InterfaceDescriptor;
+  	ZeroMemory( &InterfaceDescriptor, sizeof(USB_INTERFACE_DESCRIPTOR) );
+	
+	WINUSB_PIPE_INFORMATION Pipe;
+  	ZeroMemory( &Pipe, sizeof(WINUSB_PIPE_INFORMATION) );
+	
+	bResult = WinUsb_QueryInterfaceSettings(WinUsbHandle, 0, &InterfaceDescriptor); 
+  	assert(bResult == TRUE);
+	for(UCHAR index = 0; index < InterfaceDescriptor.bNumEndpoints; ++index) {
+		bResult = WinUsb_QueryPipe(WinUsbHandle, 0, index, &Pipe);
+		assert(bResult == TRUE);
+		printf("Pipe #%d, PipeId %d, ", index, Pipe.PipeId);
+		switch(Pipe.PipeType) {
+			case UsbdPipeTypeControl: printf("PipeType: UsbdPipeTypeControl"); break;
+			case UsbdPipeTypeIsochronous: printf("PipeType: UsbdPipeTypeIsochronous"); break;
+			case UsbdPipeTypeBulk: 
+				printf("PipeType: UsbdPipeTypeBulk, "); 
+				if(USB_ENDPOINT_DIRECTION_IN(Pipe.PipeId))
+		            printf("Direction: In");
+	          	if(USB_ENDPOINT_DIRECTION_OUT(Pipe.PipeId))
+		            printf("Direction: Out");
+				break;
+			case UsbdPipeTypeInterrupt: printf("PipeType: UsbdPipeTypeInterrupt"); break;
+		}
+		printf("\n");
 	}
-	switch(DeviceSpeed) {
-		case LowSpeed: printf("Device speed: %d (Low speed).\n", DeviceSpeed); break;
-		case FullSpeed: printf("Device speed: %d (Full speed).\n", DeviceSpeed); break;
-		case HighSpeed: printf("Device speed: %d (High speed).\n", DeviceSpeed); break;
-  		default: printf("Unknown speed %d\n", DeviceSpeed);
-	}
+	/*
+		#define STLINK_RX_EP          (1|ENDPOINT_IN)
+		#define STLINK_TX_EP          (2|ENDPOINT_OUT)
+		#define STLINK_TRACE_EP       (3|ENDPOINT_IN)
+	*/
+	
+	// Teardowns
+	WinUsb_Free(WinUsbHandle);
+	CloseHandle(DeviceHandle);
 }
 
 int main() {
