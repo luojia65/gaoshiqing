@@ -118,11 +118,11 @@ int main() {
 	// information set
 	DWORD dwIndex = 0;
 	SP_DEVICE_INTERFACE_DATA DevInterfaceData = { sizeof(SP_DEVICE_INTERFACE_DATA) };
-	SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
+	// SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
 	PSP_DEVICE_INTERFACE_DETAIL_DATA_W pInterfaceDetailData;
-	DWORD BufSize = 0;
+	DWORD BufSize = 0, BufTail = 0;
 	while(TRUE) {
-		printf("BufSize: %d\n", BufSize);
+		printf("BufSize: %d, BufTail: %d\n", BufSize, BufTail);
 		BOOL bRet = SetupDiEnumDeviceInterfaces(
 			hDevInfo, 
 			NULL, 
@@ -141,15 +141,16 @@ int main() {
 			&DevInterfaceData,
 			pInterfaceDetailData,
 			BufSize, 
-			&BufSize,
-			&DevInfoData
+			&BufTail,
+			NULL
 		);
 		if(bRet_det_1 == FALSE) {
 			if(GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 				if (pInterfaceDetailData == NULL) 
-					pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalAlloc(LPTR, BufSize);
-				else pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalReAlloc(pInterfaceDetailData, BufSize, LPTR);
+					pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalAlloc(LPTR, BufTail);
+				else pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalReAlloc(pInterfaceDetailData, BufTail, LPTR);
 				pInterfaceDetailData->cbSize = sizeof(PSP_DEVICE_INTERFACE_DETAIL_DATA_W);
+				BufSize = BufTail;
 				continue;
 			} else {
 				printf("Unexpected Error: %d\n", GetLastError());
