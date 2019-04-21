@@ -66,7 +66,7 @@ void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 		FILE_SHARE_READ | FILE_SHARE_WRITE,
 		NULL,
 		OPEN_EXISTING,
-		FILE_FLAG_OVERLAPPED,
+		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
 		NULL
 	);
 	if(DeviceHandle == INVALID_HANDLE_VALUE) {
@@ -77,6 +77,7 @@ void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 	BOOL bResult = WinUsb_Initialize(DeviceHandle, &WinUsbHandle);
 	if(bResult == FALSE) {
 		printf("WinUsb initialize error: %d\n", GetLastError());
+		CloseHandle(DeviceHandle);
 		return;
 	}
 	// WinUsbHandle is now valid. Do NOT confuse WinUsbHandle with DeviceHandle
@@ -118,7 +119,7 @@ int main() {
 	// information set
 	DWORD dwIndex = 0;
 	SP_DEVICE_INTERFACE_DATA DevInterfaceData = { sizeof(SP_DEVICE_INTERFACE_DATA) };
-	// SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
+	 SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
 	PSP_DEVICE_INTERFACE_DETAIL_DATA_W pInterfaceDetailData;
 	DWORD BufSize = 0, BufTail = 0;
 	while(TRUE) {
@@ -142,7 +143,7 @@ int main() {
 			pInterfaceDetailData,
 			BufSize, 
 			&BufTail,
-			NULL
+			&DevInfoData
 		);
 		if(bRet_det_1 == FALSE) {
 			if(GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
