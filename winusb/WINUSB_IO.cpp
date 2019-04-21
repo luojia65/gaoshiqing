@@ -116,6 +116,7 @@ int main() {
 	"system: 0x%x\n", hDevInfo);
 	// Retrieve context structure for one interface of a device 
 	// information set
+	DWORD dwIndex = 0;
 	SP_DEVICE_INTERFACE_DATA DevInterfaceData = { sizeof(SP_DEVICE_INTERFACE_DATA) };
 	SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
 	PSP_DEVICE_INTERFACE_DETAIL_DATA_W pInterfaceDetailData;
