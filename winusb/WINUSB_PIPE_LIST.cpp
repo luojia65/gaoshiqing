@@ -30,6 +30,35 @@ void MyApp_PrintDeviceSpeed(WINUSB_INTERFACE_HANDLE WinUsbHandle) {
 	}
 }
 
+void MyApp_PrintPipeList(WINUSB_INTERFACE_HANDLE WinUsbHandle) {
+	USB_INTERFACE_DESCRIPTOR InterfaceDescriptor;
+//  	ZeroMemory( &InterfaceDescriptor, sizeof(USB_INTERFACE_DESCRIPTOR) );
+	
+	WINUSB_PIPE_INFORMATION Pipe;
+//  	ZeroMemory( &Pipe, sizeof(WINUSB_PIPE_INFORMATION) );
+	
+	BOOL bResult = WinUsb_QueryInterfaceSettings(WinUsbHandle, 0, &InterfaceDescriptor); 
+  	assert(bResult == TRUE);
+	for(UCHAR index = 0; index < InterfaceDescriptor.bNumEndpoints; ++index) {
+		bResult = WinUsb_QueryPipe(WinUsbHandle, 0, index, &Pipe);
+		assert(bResult == TRUE);
+		printf("Pipe #%d, PipeId %d, ", index, Pipe.PipeId);
+		switch(Pipe.PipeType) {
+			case UsbdPipeTypeControl: printf("PipeType: UsbdPipeTypeControl"); break;
+			case UsbdPipeTypeIsochronous: printf("PipeType: UsbdPipeTypeIsochronous"); break;
+			case UsbdPipeTypeBulk: 
+				printf("PipeType: UsbdPipeTypeBulk, "); 
+				if(USB_ENDPOINT_DIRECTION_IN(Pipe.PipeId))
+		            printf("Direction: In");
+	          	if(USB_ENDPOINT_DIRECTION_OUT(Pipe.PipeId))
+		            printf("Direction: Out");
+				break;
+			case UsbdPipeTypeInterrupt: printf("PipeType: UsbdPipeTypeInterrupt"); break;
+		}
+		printf("\n");
+	}
+}
+
 void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 	HANDLE DeviceHandle = CreateFileW(
 		path, 
@@ -52,36 +81,12 @@ void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 	}
 	// WinUsbHandle is now valid. Do NOT confuse WinUsbHandle with DeviceHandle
 	
-	// Get USB speed
+	// Print USB speed
 	MyApp_PrintDeviceSpeed(WinUsbHandle);
 	
-	// Get PipeId  
-	USB_INTERFACE_DESCRIPTOR InterfaceDescriptor;
-  	ZeroMemory( &InterfaceDescriptor, sizeof(USB_INTERFACE_DESCRIPTOR) );
+	// Print pipes  
+	MyApp_PrintPipeList(WinUsbHandle);
 	
-	WINUSB_PIPE_INFORMATION Pipe;
-  	ZeroMemory( &Pipe, sizeof(WINUSB_PIPE_INFORMATION) );
-	
-	bResult = WinUsb_QueryInterfaceSettings(WinUsbHandle, 0, &InterfaceDescriptor); 
-  	assert(bResult == TRUE);
-	for(UCHAR index = 0; index < InterfaceDescriptor.bNumEndpoints; ++index) {
-		bResult = WinUsb_QueryPipe(WinUsbHandle, 0, index, &Pipe);
-		assert(bResult == TRUE);
-		printf("Pipe #%d, PipeId %d, ", index, Pipe.PipeId);
-		switch(Pipe.PipeType) {
-			case UsbdPipeTypeControl: printf("PipeType: UsbdPipeTypeControl"); break;
-			case UsbdPipeTypeIsochronous: printf("PipeType: UsbdPipeTypeIsochronous"); break;
-			case UsbdPipeTypeBulk: 
-				printf("PipeType: UsbdPipeTypeBulk, "); 
-				if(USB_ENDPOINT_DIRECTION_IN(Pipe.PipeId))
-		            printf("Direction: In");
-	          	if(USB_ENDPOINT_DIRECTION_OUT(Pipe.PipeId))
-		            printf("Direction: Out");
-				break;
-			case UsbdPipeTypeInterrupt: printf("PipeType: UsbdPipeTypeInterrupt"); break;
-		}
-		printf("\n");
-	}
 	/*
 		#define STLINK_RX_EP          (1|ENDPOINT_IN)
 		#define STLINK_TX_EP          (2|ENDPOINT_OUT)
