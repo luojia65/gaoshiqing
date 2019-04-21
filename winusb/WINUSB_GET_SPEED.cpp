@@ -28,7 +28,25 @@ void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 		return;
 	}
 	// WinUsbHandle is now valid
-	
+	// Get USB speed
+	UCHAR DeviceSpeed;
+	ULONG BufSize = 1;
+	bResult = WinUsb_QueryDeviceInformation(
+		WinUsbHandle, 
+		DEVICE_SPEED, 
+		&BufSize, 
+		&DeviceSpeed
+	);
+	if (bResult == FALSE) {
+	    printf("Error getting device speed: %d.\n", GetLastError());
+		return;
+	}
+	switch(DeviceSpeed) {
+		case LowSpeed: printf("Device speed: %d (Low speed).\n", DeviceSpeed); break;
+		case FullSpeed: printf("Device speed: %d (Full speed).\n", DeviceSpeed); break;
+		case HighSpeed: printf("Device speed: %d (High speed).\n", DeviceSpeed); break;
+  		default: printf("Unknown speed %d\n", DeviceSpeed);
+	}
 }
 
 int main() {
