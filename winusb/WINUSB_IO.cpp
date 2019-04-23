@@ -59,6 +59,62 @@ void MyApp_PrintPipeList(WINUSB_INTERFACE_HANDLE WinUsbHandle) {
 	}
 }
 
+#define ENDPOINT_IN  0x80
+#define ENDPOINT_OUT 0x00
+#define STLINK_RX_EP	(1|ENDPOINT_IN)
+#define STLINK_TX_EP    (2|ENDPOINT_OUT)
+#define STLINK_TRACE_EP (3|ENDPOINT_IN)
+
+#define STLINK_GET_VERSION             0xF1
+#define STLINK_DEBUG_COMMAND           0xF2
+#define STLINK_DFU_COMMAND             0xF3
+#define STLINK_SWIM_COMMAND            0xF4
+#define STLINK_GET_CURRENT_MODE        0xF5
+#define STLINK_GET_TARGET_VOLTAGE      0xF7
+
+#define STLINK_SG_SIZE        (31)
+#define STLINK_DATA_SIZE      (4096)
+
+typedef struct _STLinkV2 {
+	WINUSB_INTERFACE_HANDLE winusb_handle;
+	UCHAR cmd_buf[STLINK_SG_SIZE];
+	size_t cmd_idx;
+	UCHAR data_buf[STLINK_DATA_SIZE];
+	size_t data_idx;
+} *MYAPP_STLINKV2_HANDLE;
+
+MYAPP_STLINKV2_HANDLE MyApp_CreateSTLinkV2Handle(WINUSB_INTERFACE_HANDLE winusb_handle) {
+	MYAPP_STLINKV2_HANDLE ans = (MYAPP_STLINKV2_HANDLE)malloc(sizeof(_STLinkV2));
+	ZeroMemory(ans, sizeof(_STLinkV2));
+	ans->winusb_handle = winusb_handle;
+	return ans;
+}
+
+void MyApp_FreeSTLinkV2Handle(MYAPP_STLINKV2_HANDLE handle) {
+	free(handle);
+}
+
+void MyApp_ProcessSTLinkV2(MYAPP_STLINKV2_HANDLE handle) {
+	ULONG LengthTransferred = 0;
+	BOOL bResult = WinUsb_GetDescriptor(
+		handle->winusb_handle,
+		USB_STRING_DESCRIPTOR_TYPE,
+		0x03, // Index
+		LANG_NEUTRAL,
+		handle->cmd_buf,
+		STLINK_SG_SIZE,
+		&LengthTransferred
+	);
+	printf("Length transferred: %d\n", LengthTransferred);
+	if(bResult == FALSE) {
+		printf("Error occurred in ControlTransfer: %d\n", GetLastError());
+		return;
+	}
+	printf("[");
+	for(int i=0;i<LengthTransferred;++i) printf("%02x ", handle->cmd_buf[i]);
+	printf("]\n");
+}
+
 void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 	HANDLE DeviceHandle = CreateFileW(
 		path, 
@@ -74,13 +130,38 @@ void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 		return;
 	}
 	WINUSB_INTERFACE_HANDLE WinUsbHandle;
+	// Do NOT confuse WinUsbHandle with DeviceHandle
 	BOOL bResult = WinUsb_Initialize(DeviceHandle, &WinUsbHandle);
 	if(bResult == FALSE) {
 		printf("WinUsb initialize error: %d\n", GetLastError());
 		CloseHandle(DeviceHandle);
 		return;
 	}
-	// WinUsbHandle is now valid. Do NOT confuse WinUsbHandle with DeviceHandle
+	// WinUsbHandle is now valid. 
+	
+	// Print description
+	USB_DEVICE_DESCRIPTOR desc;
+	ULONG len = 0;
+	WinUsb_GetDescriptor(
+		WinUsbHandle,
+		USB_DEVICE_DESCRIPTOR_TYPE,
+		0,
+		LANG_NEUTRAL,
+		(PUCHAR)&desc,
+		sizeof(USB_DEVICE_DESCRIPTOR),
+		&len // cannot be null
+	);
+	printf("Descriptor: bcdUSB: 0x%X, bDeviceClass: 0x%X, " \
+		"bDeviceSubClass: 0x%X, bDeviceProtocol: 0x%X, bMaxPacketSize0: 0x%X, " \
+		"idVendor: 0x%X, idProduct: 0x%X, bcdDevice: 0x%X, " \
+		"iManufacturer: 0x%X, iProduct: 0x%X, iSerialNumber: 0x%X, " \
+		"bNumConfigurations: 0x%X, \n",
+		desc.bcdUSB, desc.bDeviceClass,
+		desc.bDeviceSubClass, desc.bDeviceProtocol, desc.bMaxPacketSize0,
+		desc.idVendor, desc.idProduct, desc.bcdDevice,
+		desc.iManufacturer, desc.iProduct, desc.iSerialNumber,
+		desc.bNumConfigurations
+	);
 	
 	// Print USB speed
 	MyApp_PrintDeviceSpeed(WinUsbHandle);
@@ -88,11 +169,18 @@ void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
 	// Print pipes  
 	MyApp_PrintPipeList(WinUsbHandle);
 	
-	/*
-		#define STLINK_RX_EP          (1|ENDPOINT_IN)
-		#define STLINK_TX_EP          (2|ENDPOINT_OUT)
-		#define STLINK_TRACE_EP       (3|ENDPOINT_IN)
-	*/
+#define STLINK_VID		(0x0483) 
+#define STLINK_V2_PID   (0x3748)
+	if(desc.idVendor == STLINK_VID) {
+		switch(desc.idProduct) {
+			case STLINK_V2_PID: 
+				printf("STLinkV2 (0x0483, 0x3748) detected!\n"); 
+				MYAPP_STLINKV2_HANDLE handle = MyApp_CreateSTLinkV2Handle(WinUsbHandle);
+				MyApp_ProcessSTLinkV2(handle); 
+				MyApp_FreeSTLinkV2Handle(handle);
+				break;
+		}
+	} 
 	
 	// Teardowns
 	WinUsb_Free(WinUsbHandle);
@@ -119,7 +207,7 @@ int main() {
 	// information set
 	DWORD dwIndex = 0;
 	SP_DEVICE_INTERFACE_DATA DevInterfaceData = { sizeof(SP_DEVICE_INTERFACE_DATA) };
-	 SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
+	SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
 	PSP_DEVICE_INTERFACE_DETAIL_DATA_W pInterfaceDetailData;
 	DWORD BufSize = 0, BufTail = 0;
 	while(TRUE) {
