@@ -73,6 +73,7 @@ void MyApp_PrintPipeList(WINUSB_INTERFACE_HANDLE WinUsbHandle) {
 #define STLINK_GET_TARGET_VOLTAGE      0xF7
 
 #define STLINK_SG_SIZE        (31)
+#define STLINK_CMD_SIZE_V2    (16)
 #define STLINK_DATA_SIZE      (4096)
 
 typedef struct _STLinkV2 {
@@ -94,25 +95,80 @@ void MyApp_FreeSTLinkV2Handle(MYAPP_STLINKV2_HANDLE handle) {
 	free(handle);
 }
 
-void MyApp_ProcessSTLinkV2(MYAPP_STLINKV2_HANDLE handle) {
-	ULONG LengthTransferred = 0;
+void MyAppPrivate_STLinkV2_GetDescriptor(MYAPP_STLINKV2_HANDLE handle, UCHAR index, USHORT lang_id, PULONG LengthTransferred) {
 	BOOL bResult = WinUsb_GetDescriptor(
 		handle->winusb_handle,
 		USB_STRING_DESCRIPTOR_TYPE,
-		0x03, // Index
-		LANG_NEUTRAL,
+		index, 
+		lang_id,
 		handle->cmd_buf,
 		STLINK_SG_SIZE,
-		&LengthTransferred
+		LengthTransferred
 	);
-	printf("Length transferred: %d\n", LengthTransferred);
 	if(bResult == FALSE) {
-		printf("Error occurred in ControlTransfer: %d\n", GetLastError());
+		printf("Error occurred in GetDescriptor: %d\n", GetLastError());
 		return;
 	}
-	printf("[");
-	for(int i=0;i<LengthTransferred;++i) printf("%02x ", handle->cmd_buf[i]);
+}
+
+void MyApp_ProcessSTLinkV2(MYAPP_STLINKV2_HANDLE handle) {
+	ULONG LengthTransferredOut, LengthTransferredIn;
+	MyAppPrivate_STLinkV2_GetDescriptor(handle, 0x00, LANG_NEUTRAL, &LengthTransferredOut);
+	USHORT lang_id = *(USHORT*)(handle->cmd_buf+2);
+	MyAppPrivate_STLinkV2_GetDescriptor(handle, 0x03, lang_id, &LengthTransferredOut);
+	printf("Device serial number: [");
+	for(int i=0;i<LengthTransferredOut;i+=2) printf("%lc", handle->cmd_buf[i]);
 	printf("]\n");
+	memset(handle->cmd_buf, 0, STLINK_SG_SIZE);
+	handle->cmd_buf[0] = STLINK_GET_VERSION;
+	HANDLE hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+	OVERLAPPED overlapped;
+	overlapped.hEvent = hEvent;
+	BOOL bResult = WinUsb_WritePipe(
+		handle->winusb_handle,
+		STLINK_TX_EP,
+		handle->cmd_buf,
+		STLINK_CMD_SIZE_V2,
+		NULL,//&LengthTransferred,
+		&overlapped
+	);
+	if(bResult == FALSE) {
+		if(GetLastError() != ERROR_IO_PENDING) {
+			printf("Error occurred while writing pipe: %d\n", GetLastError());
+			return;
+		}
+	}
+	bResult = WinUsb_GetOverlappedResult(
+		handle->winusb_handle,
+		&overlapped,
+		&LengthTransferredOut,
+		FALSE // bWait
+	);
+	bResult = WinUsb_ReadPipe(
+		handle->winusb_handle,
+		STLINK_RX_EP,
+		handle->data_buf,
+		STLINK_DATA_SIZE,
+		NULL,
+		&overlapped
+	);
+	if(bResult == FALSE) {
+		if(GetLastError() != ERROR_IO_PENDING) {
+			printf("Error occurred while reading pipe: %d\n", GetLastError());
+			return;
+		}
+	}
+	bResult = WinUsb_GetOverlappedResult(
+		handle->winusb_handle,
+		&overlapped,
+		&LengthTransferredIn,
+		TRUE // bWait
+	);
+	if(bResult == FALSE) {
+		printf("Error occurred while waiting: %d\n", GetLastError());
+		return;
+	}
+	printf("%d bytes written, %d bytes read!\n", LengthTransferredOut, LengthTransferredIn);
 }
 
 void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
