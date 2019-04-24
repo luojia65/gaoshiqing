@@ -8,6 +8,7 @@
 
 #define u8 UCHAR
 #define u16 USHORT
+#define u32 UINT
 
 #define STLINK_VID		(0x0483) 
 #define STLINK_V2_PID   (0x3748)
@@ -21,6 +22,13 @@ u16 u16_from_be(void *ptr) {
 
 u16 u16_from_le(void *ptr) {
 	return (*(u8*)ptr) + (*(((u8*)ptr) + 1) << 8);
+}
+
+u32 u32_from_le(void *ptr) {
+	return  (*(((u8*)ptr) + 3) << 24) + 
+			(*(((u8*)ptr) + 2) << 16) + 
+			(*(((u8*)ptr) + 1) << 8) + 
+			(*(((u8*)ptr)));
 }
 
 void MyApp_PrintDeviceSpeed(WINUSB_INTERFACE_HANDLE WinUsbHandle) {
@@ -177,7 +185,7 @@ void MyApp_STLinkV2_PrintVersion(MYAPP_STLINKV2_HANDLE handle, PULONG LengthTran
 		printf("Error occurred while waiting: %d\n", GetLastError());
 		return;
 	}
-	printf("%d bytes written, %d bytes read!\n", LengthTransferredOut, LengthTransferredIn);
+	printf("%d bytes written, %d bytes read!\n", *LengthTransferredOut, *LengthTransferredIn);
 	USHORT version = u16_from_be(handle->data_buf);
 	u8 v = (version >> 12) & 0x0f;
 	u8 x = (version >> 6) & 0x3f;
@@ -187,10 +195,70 @@ void MyApp_STLinkV2_PrintVersion(MYAPP_STLINKV2_HANDLE handle, PULONG LengthTran
 	// for v2 only (not v2.1)
 	printf("ST-Link V%dJ%dS%d (API v%d) VID:PID=%04x:%04x\n",
 		v,x,y,v,vid,pid);
+	CloseHandle(hEvent);
+} 
+
+void MyApp_STLinkV2_PrintVoltage(MYAPP_STLINKV2_HANDLE handle, PULONG LengthTransferredOut, PULONG LengthTransferredIn) {
+	memset(handle->cmd_buf, 0, STLINK_SG_SIZE);
+	handle->cmd_buf[0] = STLINK_GET_TARGET_VOLTAGE;
+	HANDLE hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+	OVERLAPPED overlapped;
+	overlapped.hEvent = hEvent;
+	BOOL bResult;
+	bResult = WinUsb_ReadPipe(
+		handle->winusb_handle,
+		STLINK_RX_EP,
+		handle->data_buf,
+		STLINK_DATA_SIZE,
+		NULL,
+		&overlapped
+	);
+	if(bResult == FALSE) {
+		if(GetLastError() != ERROR_IO_PENDING) {
+			printf("Error occurred while reading pipe: %d\n", GetLastError());
+			return;
+		}
+	}
+	bResult = WinUsb_GetOverlappedResult(
+		handle->winusb_handle,
+		&overlapped,
+		LengthTransferredOut,
+		FALSE // bWait
+	);
+	bResult = WinUsb_WritePipe(
+		handle->winusb_handle,
+		STLINK_TX_EP,
+		handle->cmd_buf,
+		STLINK_CMD_SIZE_V2,
+		NULL,//&LengthTransferred,
+		&overlapped
+	);
+	if(bResult == FALSE) {
+		if(GetLastError() != ERROR_IO_PENDING) {
+			printf("Error occurred while writing pipe: %d\n", GetLastError());
+			return;
+		}
+	}
+	bResult = WinUsb_GetOverlappedResult(
+		handle->winusb_handle,
+		&overlapped,
+		LengthTransferredIn,
+		TRUE // bWait
+	);
+	if(bResult == FALSE) {
+		printf("Error occurred while waiting: %d\n", GetLastError());
+		return;
+	}
+	printf("%d bytes written, %d bytes read!\n", *LengthTransferredOut, *LengthTransferredIn);
+	u32 r1 = u32_from_le(handle->data_buf);
+	u32 r2 = u32_from_le(handle->data_buf + 4);
+	double target_volts = 2.0l*((double)r2)*(1.2l/(double)r1);
+	printf("Voltage: %lfV\n", target_volts);
+	CloseHandle(hEvent);
 } 
 
 void MyApp_ProcessSTLinkV2(MYAPP_STLINKV2_HANDLE handle) {
-	ULONG LengthTransferredOut, LengthTransferredIn;
+	ULONG LengthTransferredOut = 0, LengthTransferredIn = 0;
 	MyAppPrivate_STLinkV2_GetDescriptor(handle, 0x00, LANG_NEUTRAL, &LengthTransferredOut);
 	USHORT lang_id = *(USHORT*)(handle->cmd_buf+2);
 	MyAppPrivate_STLinkV2_GetDescriptor(handle, 0x03, lang_id, &LengthTransferredOut);
@@ -198,6 +266,7 @@ void MyApp_ProcessSTLinkV2(MYAPP_STLINKV2_HANDLE handle) {
 	for(int i=0;i<LengthTransferredOut;i+=2) printf("%lc", handle->cmd_buf[i]);
 	printf("]\n");
 	MyApp_STLinkV2_PrintVersion(handle, &LengthTransferredOut, &LengthTransferredIn);
+	MyApp_STLinkV2_PrintVoltage(handle, &LengthTransferredOut, &LengthTransferredIn);
 }
 
 void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
