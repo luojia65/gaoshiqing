@@ -7,7 +7,7 @@
 u8 *buf;
 
 void main() {
-	FILE *fp = fopen("blinky", "rb");
+	FILE *fp = fopen("gpio-interrupt-elf", "rb");
 	if(fp == NULL) {
 		printf("Error when opening file\n");
 		return;	
@@ -17,6 +17,8 @@ void main() {
 	fseek(fp, 0, SEEK_SET);
 	buf = (u8 *)malloc(len * sizeof(u8));
 	fread(buf, len, 1, fp);
-	printf("%c%c%c%c", buf[0], buf[1], buf[2], buf[3]);
+	printf("Magic: 0x%x, '%c', '%c', '%c'\n", 
+		buf[0], buf[1], buf[2], buf[3]);
+	
 } 
 
