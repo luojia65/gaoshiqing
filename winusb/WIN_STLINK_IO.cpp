@@ -286,7 +286,7 @@ int main() {
 	// information set
 	DWORD dwIndex = 0;
 	SP_DEVICE_INTERFACE_DATA DevInterfaceData = { sizeof(SP_DEVICE_INTERFACE_DATA) };
-	SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
+//	SP_DEVINFO_DATA DevInfoData = { sizeof(SP_DEVINFO_DATA) };
 	PSP_DEVICE_INTERFACE_DETAIL_DATA_W pInterfaceDetailData;
 	DWORD BufSize = 0, BufTail = 0;
 	while(TRUE) {
@@ -310,13 +310,13 @@ int main() {
 			pInterfaceDetailData,
 			BufSize, 
 			&BufTail,
-			&DevInfoData
+			NULL
 		);
 		if(bRet_det_1 == FALSE) {
 			if(GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 				if (pInterfaceDetailData == NULL) 
 					pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalAlloc(LPTR, BufTail);
-				else pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalReAlloc(pInterfaceDetailData, BufTail, LPTR);
+				else pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalReAlloc(pInterfaceDetailData, BufTail, LMEM_MOVEABLE);
 				pInterfaceDetailData->cbSize = sizeof(PSP_DEVICE_INTERFACE_DETAIL_DATA_W);
 				BufSize = BufTail;
 				continue;

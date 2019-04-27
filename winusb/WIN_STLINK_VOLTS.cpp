@@ -389,7 +389,7 @@ int main() {
 			if(GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 				if (pInterfaceDetailData == NULL) 
 					pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalAlloc(LPTR, BufTail);
-				else pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalReAlloc(pInterfaceDetailData, BufTail, LPTR);
+				else pInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)LocalReAlloc(pInterfaceDetailData, BufTail, LMEM_MOVEABLE);
 				pInterfaceDetailData->cbSize = sizeof(PSP_DEVICE_INTERFACE_DETAIL_DATA_W);
 				BufSize = BufTail;
 				continue;
