@@ -257,6 +257,62 @@ void MyApp_STLinkV2_PrintVoltage(MYAPP_STLINKV2_HANDLE handle, PULONG LengthTran
 	CloseHandle(hEvent);
 } 
 
+void MyApp_STLinkV2_PrintCurrentMode(MYAPP_STLINKV2_HANDLE handle, PULONG LengthTransferredOut, PULONG LengthTransferredIn) {
+	memset(handle->cmd_buf, 0, STLINK_SG_SIZE);
+	handle->cmd_buf[0] = STLINK_GET_CURRENT_MODE;
+	HANDLE hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+	OVERLAPPED overlapped;
+	overlapped.hEvent = hEvent;
+	BOOL bResult;
+	bResult = WinUsb_ReadPipe(
+		handle->winusb_handle,
+		STLINK_RX_EP,
+		handle->data_buf,
+		STLINK_DATA_SIZE,
+		NULL,
+		&overlapped
+	);
+	if(bResult == FALSE) {
+		if(GetLastError() != ERROR_IO_PENDING) {
+			printf("Error occurred while reading pipe [MODE]: %d\n", GetLastError());
+			return;
+		}
+	}
+	bResult = WinUsb_GetOverlappedResult(
+		handle->winusb_handle,
+		&overlapped,
+		LengthTransferredOut,
+		FALSE // bWait
+	);
+	bResult = WinUsb_WritePipe(
+		handle->winusb_handle,
+		STLINK_TX_EP,
+		handle->cmd_buf,
+		STLINK_CMD_SIZE_V2,
+		NULL,//&LengthTransferred,
+		&overlapped
+	);
+	if(bResult == FALSE) {
+		if(GetLastError() != ERROR_IO_PENDING) {
+			printf("Error occurred while writing pipe [MODE]: %d\n", GetLastError());
+			return;
+		}
+	}
+	bResult = WinUsb_GetOverlappedResult(
+		handle->winusb_handle,
+		&overlapped,
+		LengthTransferredIn,
+		TRUE // bWait
+	);
+	if(bResult == FALSE) {
+		printf("Error occurred while waiting: %d\n", GetLastError());
+		return;
+	}
+	u8 mode = *handle->data_buf;
+	printf("Mode: %d\n", mode);
+	CloseHandle(hEvent);
+} 
+
 void MyApp_ProcessSTLinkV2(MYAPP_STLINKV2_HANDLE handle) {
 	ULONG LengthTransferredOut = 0, LengthTransferredIn = 0;
 	MyAppPrivate_STLinkV2_GetDescriptor(handle, 0x00, LANG_NEUTRAL, &LengthTransferredOut);
@@ -267,6 +323,7 @@ void MyApp_ProcessSTLinkV2(MYAPP_STLINKV2_HANDLE handle) {
 	printf("]\n");
 	MyApp_STLinkV2_PrintVersion(handle, &LengthTransferredOut, &LengthTransferredIn);
 	MyApp_STLinkV2_PrintVoltage(handle, &LengthTransferredOut, &LengthTransferredIn);
+	MyApp_STLinkV2_PrintCurrentMode(handle, &LengthTransferredOut, &LengthTransferredIn);
 }
 
 void MyApp_ProcessDeviceAtPath(LPCWSTR path) {
@@ -348,7 +405,7 @@ int main() {
 		&GUID_DEVINTERFACE_USB_DEVICE, 
 		NULL, 
 		NULL, 
-		DIGCF_PRESENT | DIGCF_DEVICEINTERFACE
+		DIGCF_ALLCLASSES | DIGCF_PRESENT | DIGCF_DEVICEINTERFACE
 	);
 	if (hDevInfo == INVALID_HANDLE_VALUE){
 		printf("SetupDiClassDevs() failed. GetLastError() " \
@@ -400,6 +457,21 @@ int main() {
 				continue;
 			}
 		}
+//		DWORD size = 1024;
+//		PSTR buffer = (PSTR)malloc(sizeof(char)*size); 
+//		bRet = SetupDiGetDeviceInstanceId(
+//			hDevInfo,
+//			&DevInfoData,
+//			buffer,
+//			size,
+//			&size
+//		);
+//		if(bRet == FALSE) {
+//			printf("SetupDiGetDeviceInstanceId failed " \
+//			"GetLastError() returns: 0x%x\n", GetLastError());
+//		}
+//		
+//		printf("BUFFER: %s\n", buffer);
 		// use %ls, not %s
 	    printf("Device path: %ls\n", pInterfaceDetailData->DevicePath);  
 		MyApp_ProcessDeviceAtPath(pInterfaceDetailData->DevicePath);
