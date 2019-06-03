@@ -13,37 +13,47 @@
 
 int main() 
 {		
-	int i = 0;
-	int res = 0;
 	HDEVINFO hDevInfo;  
 	SP_DEVINFO_DATA DeviceInfoData = {sizeof(DeviceInfoData)};   
  
 	// get device class information handle
 	hDevInfo = SetupDiGetClassDevs(&GUID_DEVCLASS_USB,0, 0, DIGCF_PRESENT);       
-	if (hDevInfo == INVALID_HANDLE_VALUE)     
-	{         
-		res = GetLastError();     
+	if (hDevInfo == INVALID_HANDLE_VALUE) {         
+		int res = GetLastError();     
 		return res;
 	}  
  
 	// enumerute device information
-	DWORD required_size = 0;
-	for (i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData); i++)
-	{		
-		DWORD DataT;         
-		char friendly_name[2046] = {0};         
-		DWORD buffersize = 2046;        
-		DWORD req_bufsize = 0;      
-		
+	char *buf = NULL; 
+	DWORD CurSize = 0, ReqSize = 0;
+	int i = 0; 
+	while(SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData) == TRUE) {		
+		DWORD DataT;     
+		int ans = SetupDiGetDeviceRegistryPropertyA(
+			hDevInfo, 
+			&DeviceInfoData, 
+			SPDRP_DEVICEDESC, 
+			&DataT, 
+			(LPBYTE) buf, 
+			CurSize, 
+			&ReqSize
+		);
 		// get device description information
-		if (!SetupDiGetDeviceRegistryPropertyA(hDevInfo, &DeviceInfoData, SPDRP_DEVICEDESC, &DataT, (LPBYTE)friendly_name, buffersize, &req_bufsize))
-		{
-			res = GetLastError();
+		if (ans == FALSE) {
+			if(GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+				if(buf == NULL) buf = (char *)LocalAlloc(LPTR, ReqSize);
+				else buf = (char *)LocalReAlloc(buf, ReqSize, LMEM_MOVEABLE);
+				CurSize = ReqSize;
+			} else {
+				i++;
+			}
 			continue;
 		}
 		
-		printf("USB device %d: %s\n", i, friendly_name);
+		printf("USB device %d: %s\n", i, buf);
+		++i;
 	}
+	LocalFree(buf);
  
 	return 0;
 }
